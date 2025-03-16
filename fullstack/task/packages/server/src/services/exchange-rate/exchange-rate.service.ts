@@ -2,8 +2,12 @@ import { Injectable } from '@nestjs/common';
 import axios from 'axios';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
+import { config } from 'dotenv';
 import { ExchangeRateCache } from '../../entities/exchange-rate-cache.entity';
 
+config();
+
+const { CNB_API_URL: cnbApiUrl } = process.env;
 @Injectable()
 export class ExchangeRateService {
     constructor(
@@ -32,10 +36,7 @@ export class ExchangeRateService {
     }
 
     private async fetchExchangeRates() {
-        const response = await axios.get(
-            // eslint-disable-next-line max-len
-            'https://www.cnb.cz/en/financial-markets/foreign-exchange-market/central-bank-exchange-rate-fixing/central-bank-exchange-rate-fixing/daily.txt'
-        );
+        const response = await axios.get(cnbApiUrl ?? '');
         const text = response.data;
         const lines: string[] = text.split('\n');
         const dataLines = lines.slice(2).filter((line) => line.trim() !== '');
