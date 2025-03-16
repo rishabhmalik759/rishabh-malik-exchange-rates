@@ -1,0 +1,15 @@
+overwrite: true
+schema: "http://localhost:4001/graphql"
+documents: "src/**/*.{tsx,ts}"
+generates:
+  src/generated/graphql.ts:
+    plugins:
+      - "typescript"
+      - "typescript-operations"
+      - "typescript-react-apollo"
+    config:
+      withHooks: true
+      apolloReactHooksImportFrom: "@apollo/client"
+      maybeValue: T | undefined
+      scalars:
+        DateTime: string

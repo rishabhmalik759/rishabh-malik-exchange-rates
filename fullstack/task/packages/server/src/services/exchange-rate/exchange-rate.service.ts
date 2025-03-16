@@ -1,11 +1,59 @@
 import { Injectable } from '@nestjs/common';
+import axios from 'axios';
+import { InjectRepository } from '@nestjs/typeorm';
+import { Repository } from 'typeorm';
+import { ExchangeRateCache } from '../../entities/exchange-rate-cache.entity';
 
 @Injectable()
 export class ExchangeRateService {
-    public getExchangeRates = async () => {
-        // TODO: Implement the fetching and parsing of the exchange rates.
-        // Use this method in the resolver.
+    constructor(
+        @InjectRepository(ExchangeRateCache)
+        private readonly cacheRepository: Repository<ExchangeRateCache>
+    ) {}
 
-        return [];
-    };
+    public async getExchangeRates(): Promise<Partial<ExchangeRateCache>> {
+        const [cachedEntry] = await this.cacheRepository.find({
+            order: { createdAt: 'DESC' },
+            take: 1,
+        });
+
+        if (cachedEntry) {
+            const now = new Date();
+            const cacheAge = now.getTime() - cachedEntry.createdAt.getTime();
+            if (cacheAge < 5 * 60 * 1000) {
+                return {
+                    rates: cachedEntry.rates,
+                    lastFetchTimestamp: cachedEntry.lastFetchTimestamp,
+                };
+            }
+        }
+
+        return this.fetchExchangeRates();
+    }
+
+    private async fetchExchangeRates() {
+        const response = await axios.get(
+            // eslint-disable-next-line max-len
+            'https://www.cnb.cz/en/financial-markets/foreign-exchange-market/central-bank-exchange-rate-fixing/central-bank-exchange-rate-fixing/daily.txt'
+        );
+        const text = response.data;
+        const lines: string[] = text.split('\n');
+        const dataLines = lines.slice(2).filter((line) => line.trim() !== '');
+        const rates = dataLines.map((line) => {
+            const [country, currency, amountStr, code, rateStr] = line.split('|');
+            const amount = parseInt(amountStr, 10);
+            const rate = parseFloat(rateStr.replace(',', '.'));
+            return { country, currency, amount, code, rate };
+        });
+
+        this.cacheRepository.clear();
+        const lastFetchTimestamp = new Date();
+        const newCacheEntry = this.cacheRepository.create({
+            rates,
+            lastFetchTimestamp,
+        });
+        await this.cacheRepository.save(newCacheEntry);
+
+        return { rates, lastFetchTimestamp };
+    }
 }
